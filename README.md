@@ -5,6 +5,13 @@ flows agents reliably fumble (PR orientation, review threads, CI debugging)
 into single bounded calls. Everything else stays raw `gh`; the skill is
 deliberately minimal: one file to read, no MCP connector, no schema bloat.
 
+| | raw gh loop | with the skill |
+|---|---|---|
+| tool calls per flow | 3-5 + retries | 1 |
+| context consumed | full logs, diffs, JSON dumps | bounded snippets, files on disk |
+| false-error retries | SIGPIPE / exit-code noise | none; exit 0 when the report succeeds |
+| latency | sequential multi-turn | parallel, single turn |
+
 ```
 SKILL.md              script index + 13 gotchas, each traced to real session failures
 scripts/
@@ -36,19 +43,22 @@ alternative, read-only surface.
 
 ## What using it gets you
 
+- **Fewer tool calls.** PR orientation and CI drilldown were reliably 3-5
+  call guessing loops in the mined sessions; each script collapses the
+  chain to one.
+- **Less context.** Output is bounded by design: bodies truncated with
+  markers, files capped, full CI logs parked on disk with paths printed.
+  A raw log dump is often 10k+ lines; the snippet that enters context is ~45.
+- **Lower cost.** Fewer calls and smaller outputs mean fewer tokens per
+  GitHub task, and the most expensive failure mode is gone: scripts exit 0
+  when the report succeeds, so agents never burn a turn investigating a
+  phantom SIGPIPE or exit-code error.
+- **Faster answers.** API calls run concurrently (measured 1.5s vs 2.3s
+  sequential), and killing the retry loops turns multi-turn flows into
+  single turns.
 - **A failure class deleted, not documented.** The most re-typed, most
   error-prone command in the corpus was a 15-line review-threads GraphQL
   query with 7 observed failure modes. It's now one short command.
-- **1 call instead of 3–5.** PR orientation and CI drilldown were reliably
-  multi-call guessing loops; each script collapses the chain and prints
-  bounded, agent-readable output (bodies truncated with markers, full data
-  via `--json`, big logs parked in files with paths printed).
-- **No false errors.** Scripts exit 0 whenever the *report* succeeds: red CI,
-  unresolved threads, and "no checks" are answers, not failures. This kills
-  the observed pattern of agents misdiagnosing SIGPIPE/exit-code noise.
-- **Parallel by default.** `pr-snapshot.ts` runs its three API calls
-  concurrently (measured 1.5s vs 2.3s sequential), but the real speedup is
-  eliminating the retry round-trips entirely.
 
 ## Testing
 
