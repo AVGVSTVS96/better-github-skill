@@ -92,6 +92,14 @@ report, and a SKILL.md tip that would 404 (`-f`/`-F` silently flips GET→POST).
 
 Requires `gh` (authenticated) and node ≥ 23.6 (scripts run TS directly).
 
+Via the [skills CLI](https://skills.sh) (installs into whichever agents you use):
+
+```bash
+npx skills add AVGVSTVS96/better-github-skill
+```
+
+Or manually:
+
 ```bash
 git clone https://github.com/AVGVSTVS96/better-github-skill ~/.agents/skills/better-github-skill
 ln -s ../../.agents/skills/better-github-skill ~/.claude/skills/better-github-skill   # Claude Code
