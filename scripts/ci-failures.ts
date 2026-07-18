@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Failing CI drilldown: checks → failing jobs/steps → log snippet each.
-// Full job logs are saved to files (paths printed) — rg those instead of re-fetching.
+// Full job logs are saved to files (paths printed); rg those instead of re-fetching.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,7 +36,7 @@ interface RunView {
 }
 
 // The tail of a failed log is post-job cleanup noise; the story sits just above
-// the last error marker — so the context window is asymmetric.
+// the last error marker, so the context window is asymmetric.
 function snippet(log: string, before = 40, after = 5, cap = 100): string {
   const lines = log.split("\n");
   const lastMatch = (re: RegExp) => {
@@ -57,7 +57,7 @@ function slug(s: string): string {
 async function jobLog(repo: string, job: Job, logDir: string) {
   try {
     const log = await gh(["api", `repos/${repo}/actions/jobs/${job.databaseId}/logs`]);
-    if (log.startsWith("PK")) return { error: "log came back as a zip archive — open the job URL instead" };
+    if (log.startsWith("PK")) return { error: "log came back as a zip archive; open the job URL instead" };
     const file = join(logDir, `${job.databaseId}-${slug(job.name)}.log`);
     writeFileSync(file, log);
     return { file, lines: log.split("\n").length, snippet: snippet(log) };
@@ -111,7 +111,7 @@ run(async () => {
   } else {
     if (v.pr && !/^\d+$/.test(v.pr)) throw new Error(`--pr must be a number, got: ${v.pr}`);
     // with an explicit -R, "the current branch's PR" would resolve against the
-    // cwd repo and silently target the wrong PR — refuse to guess
+    // cwd repo and silently target the wrong PR; refuse to guess
     if (!v.pr && v.repo) throw new Error("with -R, also pass --pr N or a run id");
     prNum = v.pr ? Number(v.pr) : (await ghJson<{ number: number }>(["pr", "view", "--json", "number"])).number;
     const raw = await gh(["pr", "checks", String(prNum), "-R", repo, "--json", "name,state,bucket,link"], {
@@ -151,22 +151,22 @@ run(async () => {
   }
 
   const prLabel = prNum ? ` PR #${prNum}` : "";
-  console.log(`${repo}${prLabel} — ${results.length} run${results.length === 1 ? "" : "s"} analyzed\n`);
+  console.log(`${repo}${prLabel}: ${results.length} run${results.length === 1 ? "" : "s"} analyzed\n`);
   for (const r of results) {
     if ("error" in r) {
-      console.log(`✗ run ${r.runId} — could not analyze: ${r.error}\n`);
+      console.log(`✗ could not analyze run ${r.runId}: ${r.error}\n`);
       continue;
     }
     if (r.jobs.length === 0 && !FAILING.has(r.conclusion)) {
-      console.log(`○ ${r.workflow} · run ${r.runId} concluded ${r.conclusion || "in progress"} — nothing to report\n`);
+      console.log(`○ ${r.workflow} · run ${r.runId} concluded ${r.conclusion || "in progress"}, nothing to report\n`);
       continue;
     }
     const via = r.checks.length ? ` (checks: ${r.checks.join(", ")})` : "";
     console.log(`✗ ${r.workflow} · run ${r.runId} · ${r.conclusion}${via}`);
     console.log(`  ${r.url}`);
-    if (r.jobs.length === 0) console.log("  no failing jobs — failure is at the workflow level (startup/config?)");
+    if (r.jobs.length === 0) console.log("  no failing jobs; failure is at the workflow level (startup/config?)");
     for (const j of r.jobs) {
-      const steps = j.failedSteps.length ? ` — failed step: ${j.failedSteps.join(", ")}` : "";
+      const steps = j.failedSteps.length ? `, failed step: ${j.failedSteps.join(", ")}` : "";
       console.log(`  job: ${j.name} (${j.conclusion})${steps}`);
       if ("error" in j.log) {
         console.log(`    log: ${j.log.error}`);
@@ -178,5 +178,5 @@ run(async () => {
     }
     console.log();
   }
-  for (const c of external) console.log(`✗ ${c.name} — external check (not GitHub Actions): ${c.link || "(no link)"}`);
+  for (const c of external) console.log(`✗ ${c.name} is an external check (not GitHub Actions): ${c.link || "(no link)"}`);
 });

@@ -87,7 +87,7 @@ run(async () => {
 
   const [pr, checksRaw, threads] = await Promise.all([
     ghJson<Pr>(["pr", "view", String(n), "-R", repo, "--json", FIELDS]),
-    // exits 1 = failing checks, 8 = pending — both still emit valid JSON.
+    // exits 1 = failing checks, 8 = pending; both still emit valid JSON.
     // "no checks reported" is benign; any other checks error is real and must surface.
     gh(["pr", "checks", String(n), "-R", repo, "--json", "name,state,bucket"], { okCodes: [1, 8] }).catch(
       (e: unknown) => {
@@ -121,7 +121,7 @@ run(async () => {
   }
 
   const draft = pr.isDraft ? " (draft)" : "";
-  console.log(`${repo}#${pr.number} — ${pr.title}`);
+  console.log(`${repo}#${pr.number}: ${pr.title}`);
   console.log(`${pr.state}${draft} · @${pr.author.login} · created ${pr.createdAt.slice(0, 10)} · ${pr.url}`);
   console.log(`${pr.baseRefName} ← ${pr.headRefName} @ ${pr.headRefOid.slice(0, 12)}`);
   console.log(

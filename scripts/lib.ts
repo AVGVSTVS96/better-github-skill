@@ -15,17 +15,17 @@ export async function gh(args: string[], opts: GhOpts = {}): Promise<string> {
     return stdout;
   } catch (e) {
     const err = e as NodeJS.ErrnoException & { stdout?: string; stderr?: string };
-    // An okCode with empty stdout is not "valid output" — it's a real error
+    // An okCode with empty stdout is not "valid output"; it's a real error
     // (e.g. `pr checks` exits 1 both for failing checks and for a bad PR number).
     if (typeof err.code === "number" && opts.okCodes?.includes(err.code)) {
       if (err.stdout?.trim() || !err.stderr?.trim()) return err.stdout ?? "";
     }
-    if (err.code === "ENOENT") throw new Error("gh not found on PATH — install the GitHub CLI");
+    if (err.code === "ENOENT") throw new Error("gh not found on PATH; install the GitHub CLI");
     const detail =
       err.code === "ERR_CHILD_PROCESS_STDOUT_MAXBUFFER"
         ? "output exceeded 64MB maxBuffer"
         : truncate((err.stderr || err.stdout || err.message || "").trim(), 2000);
-    // Args can embed multi-line GraphQL queries — keep the prefix identifiable, not a dump.
+    // Args can embed multi-line GraphQL queries; keep the prefix identifiable, not a dump.
     const cmd = args.map((a) => truncate(a.split("\n")[0], 60)).join(" ");
     throw new Error(`gh ${cmd}\n${detail}`);
   }
@@ -50,7 +50,7 @@ export async function resolveRepo(flag?: string): Promise<string> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/gh not found|auth login|authentication/i.test(msg)) throw e;
-    throw new Error("not inside a repo with a GitHub remote — pass -R owner/repo");
+    throw new Error("not inside a repo with a GitHub remote; pass -R owner/repo");
   }
 }
 

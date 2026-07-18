@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Review threads with resolution state — porcelain gh can't get isResolved/isOutdated.
+// Review threads with resolution state; porcelain gh can't get isResolved/isOutdated.
 import { parseArgs } from "node:util";
 import { gh, resolveRepo, run, truncate } from "./lib.ts";
 
@@ -112,7 +112,7 @@ run(async () => {
 
   const open = threads.filter((t) => !t.isResolved).length;
   const outdated = threads.filter((t) => t.isOutdated).length;
-  console.log(`${repo}#${pr} — ${threads.length}/${total} threads · ${open} open · ${outdated} outdated\n`);
+  console.log(`${repo}#${pr}: ${threads.length}/${total} threads · ${open} open · ${outdated} outdated\n`);
   if (threads.length === 0) {
     return void console.log(total === 0 ? "no review threads" : "no threads match the filters");
   }
@@ -120,7 +120,7 @@ run(async () => {
     const state = t.isResolved ? "RESOLVED" : "OPEN";
     const outdatedTag = t.isOutdated ? " · outdated" : "";
     const loc = t.line ?? (t.originalLine != null ? `${t.originalLine} (original)` : "?");
-    console.log(`[${i + 1}] ${state}${outdatedTag} — ${t.path}:${loc}`);
+    console.log(`[${i + 1}] ${state}${outdatedTag} · ${t.path}:${loc}`);
     for (const c of t.comments) {
       const body = v.full ? c.body : truncate(c.body, 600);
       console.log(`  @${c.author} (${c.createdAt.slice(0, 10)}): ${body.replace(/\n/g, "\n    ")}`);
