@@ -1,9 +1,9 @@
 ---
-name: github
+name: better-github-skill
 description: GitHub work via gh CLI: PRs, review threads, CI failures, repo state. Use when inspecting a PR, reading review comments/threads, debugging failing checks or Actions runs, or composing non-trivial gh commands. Scripts cover what raw gh can't do (thread resolution state) or reliably fumbles (PR snapshots, CI log drilldown); use raw gh directly for everything else.
 ---
 
-# github
+# better-github-skill
 
 Raw `gh` first when you know the command; the scripts replace only the flows
 agents repeatedly get wrong. Scripts run TS directly (node ≥ 23.6), no deps.

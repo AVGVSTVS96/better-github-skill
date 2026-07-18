@@ -1,9 +1,9 @@
-# github: a gh CLI skill for coding agents
+# better-github-skill: a gh CLI skill for coding agents
 
-One `SKILL.md` + three zero-dependency TypeScript scripts that cover the GitHub
-flows coding agents repeatedly fumble with raw `gh`. Everything else stays raw
-`gh`; the skill is deliberately minimal: one file to read, no MCP connector,
-no schema bloat, no routing ceremony.
+One `SKILL.md` + three zero-dependency TypeScript scripts that turn the GitHub
+flows agents reliably fumble (PR orientation, review threads, CI debugging)
+into single bounded calls. Everything else stays raw `gh`; the skill is
+deliberately minimal: one file to read, no MCP connector, no schema bloat.
 
 ```
 SKILL.md              script index + 13 gotchas, each traced to real session failures
@@ -16,9 +16,8 @@ scripts/
 ## Why these three (the data)
 
 Design was mined from **1,843 real `gh` invocations** across ~7 months of
-Claude Code and Codex session transcripts (~2.2 GB), extracted with paired
-command→result analysis. The scripts target the highest-frequency failure and
-churn classes actually observed:
+Claude Code and Codex session transcripts. The scripts target the
+highest-frequency failure classes actually observed:
 
 | observed pattern | count | script |
 |---|---|---|
@@ -30,17 +29,16 @@ churn classes actually observed:
 | `gh \| head` SIGPIPE false failures | ~37% of flagged gh errors | SKILL.md gotcha |
 
 An audit of the OpenAI Codex GitHub plugin over the same corpus shaped the
-philosophy: its orienting SKILL.md was its most-used artifact, its bundled
-scripts had **zero successful runs** (no `--help`, unbounded output), and its
-~80 connector write-tools were never called once. Lesson: minimal prose,
-scripts that are easier than the raw alternative, read-only surface.
+philosophy. Its orienting SKILL.md was its most-used artifact; its bundled
+scripts had **zero successful runs**; its ~80 connector write-tools were
+never called once. The lesson: minimal prose, scripts easier than the raw
+alternative, read-only surface.
 
 ## What using it gets you
 
-- **A failure class deleted, not documented.** The single most repeated,
-  most error-prone command in the corpus (the 15-line review-threads GraphQL
-  query) becomes one short command with pagination, `-f`/`-F` coercion, and
-  author-null handling already correct.
+- **A failure class deleted, not documented.** The most re-typed, most
+  error-prone command in the corpus was a 15-line review-threads GraphQL
+  query with 7 observed failure modes. It's now one short command.
 - **1 call instead of 3–5.** PR orientation and CI drilldown were reliably
   multi-call guessing loops; each script collapses the chain and prints
   bounded, agent-readable output (bodies truncated with markers, full data
@@ -48,9 +46,9 @@ scripts that are easier than the raw alternative, read-only surface.
 - **No false errors.** Scripts exit 0 whenever the *report* succeeds: red CI,
   unresolved threads, and "no checks" are answers, not failures. This kills
   the observed pattern of agents misdiagnosing SIGPIPE/exit-code noise.
-- **Modest latency win.** `pr-snapshot.ts` runs its three API calls via
-  `Promise.all`: measured 1.5s vs 2.3s sequential on a 9-file PR. The real
-  savings are the eliminated retry round-trips, not the parallelism.
+- **Parallel by default.** `pr-snapshot.ts` runs its three API calls
+  concurrently (measured 1.5s vs 2.3s sequential), but the real speedup is
+  eliminating the retry round-trips entirely.
 
 ## Testing
 
@@ -78,14 +76,14 @@ report, and a SKILL.md tip that would 404 (`-f`/`-F` silently flips GET→POST).
 Requires `gh` (authenticated) and node ≥ 23.6 (scripts run TS directly).
 
 ```bash
-git clone <this-repo> ~/.agents/skills/github
-ln -s ../../.agents/skills/github ~/.claude/skills/github   # Claude Code
+git clone https://github.com/AVGVSTVS96/better-github-skill ~/.agents/skills/better-github-skill
+ln -s ../../.agents/skills/better-github-skill ~/.claude/skills/better-github-skill   # Claude Code
 ```
 
 Scripts are plain executables; they work standalone without the skill harness:
 
 ```bash
-~/.agents/skills/github/scripts/pr-threads.ts 5017 -R owner/repo --unresolved
-~/.agents/skills/github/scripts/pr-snapshot.ts 5017 -R owner/repo
-~/.agents/skills/github/scripts/ci-failures.ts --pr 5017 -R owner/repo
+~/.agents/skills/better-github-skill/scripts/pr-threads.ts 5017 -R owner/repo --unresolved
+~/.agents/skills/better-github-skill/scripts/pr-snapshot.ts 5017 -R owner/repo
+~/.agents/skills/better-github-skill/scripts/ci-failures.ts --pr 5017 -R owner/repo
 ```
