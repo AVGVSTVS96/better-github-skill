@@ -1,4 +1,4 @@
-# better-github-skill: a gh CLI skill for coding agents
+# better-github-skill: gh, optimized for coding agents
 
 Built from an analysis of **1,843 `gh` calls across real agent sessions**,
 better-github-skill reduces context window usage and returns agent-optimized
