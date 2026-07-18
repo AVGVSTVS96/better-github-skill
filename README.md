@@ -1,9 +1,25 @@
 # better-github-skill: a gh CLI skill for coding agents
 
-One `SKILL.md` + three zero-dependency TypeScript scripts that turn the GitHub
-flows agents reliably fumble (PR orientation, review threads, CI debugging)
-into single bounded calls. Everything else stays raw `gh`; the skill is
-deliberately minimal: one file to read, no MCP connector, no schema bloat.
+Built from an analysis of **1,843 `gh` calls across real agent sessions**,
+better-github-skill reduces context window usage and returns agent-optimized
+output for the GitHub workflows agents run most:
+
+- **pr-snapshot** returns a PR's full state in one call: metadata,
+  mergeability, checks, files, reviews, and thread counts as a few dozen
+  dense lines, replacing the 3-5 command loop and raw JSON dumps it takes
+  to assemble the same picture.
+- **pr-threads** returns review threads with the resolution and outdated
+  state porcelain `gh` can't surface, comment bodies truncated at the point
+  of diminishing returns, filterable to just what's unresolved.
+- **ci-failures** returns the failing jobs, their failed steps, and an
+  error-anchored ~45-line snippet per job; full logs are written to disk
+  and referenced by path, so 10k lines of CI output never enter context.
+
+For everything the scripts don't cover, agents use raw `gh` directly, and
+SKILL.md hardens that too: 13 gotchas mined from the same sessions, each a
+real failure mode (SIGPIPE truncation, exit-code semantics, silent GET→POST
+flips) with the working alternative, so agents skip the retry loops instead
+of rediscovering them.
 
 | | raw gh loop | with the skill |
 |---|---|---|
@@ -12,19 +28,10 @@ deliberately minimal: one file to read, no MCP connector, no schema bloat.
 | false-error retries | SIGPIPE / exit-code noise | none; exit 0 when the report succeeds |
 | latency | sequential multi-turn | parallel, single turn |
 
-```
-SKILL.md              script index + 13 gotchas, each traced to real session failures
-scripts/
-  pr-threads.ts       review threads w/ isResolved/isOutdated; porcelain gh can't get this
-  pr-snapshot.ts      full PR state in one call (meta, mergeability, checks, files, reviews, threads)
-  ci-failures.ts      failing checks → jobs/steps → error-anchored log snippets, full logs to files
-```
-
 ## Why these three (the data)
 
-Design was mined from **1,843 real `gh` invocations** across ~7 months of
-Claude Code and Codex session transcripts. The scripts target the
-highest-frequency failure classes actually observed:
+The mining covered ~7 months of Claude Code and Codex session transcripts.
+The scripts target the highest-frequency failure classes actually observed:
 
 | observed pattern | count | script |
 |---|---|---|
