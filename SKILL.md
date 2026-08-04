@@ -13,7 +13,7 @@ agents repeatedly get wrong. Scripts run TS directly (node ≥ 23.6), no deps.
 | script | use for |
 |---|---|
 | `scripts/pr-snapshot.ts <pr> [-R o/r]` | full PR state in one call: meta, mergeability, checks, files, reviews, comments, thread counts. Use instead of hand-assembling `pr view --json` field sets or chaining view/checks/comments calls. |
-| `scripts/pr-threads.ts <pr> [-R o/r] [--unresolved] [--author X] [--since ISO]` | the full review conversation: review bodies, issue comments, and inline threads with isResolved/isOutdated (which porcelain gh cannot get). Read-only: never reply to or resolve threads unless explicitly told to. |
+| `scripts/pr-threads.ts <pr> [-R o/r] [--all] [--author X] [--since ISO]` | the full review conversation: review bodies, issue comments, and unresolved inline threads (resolution state porcelain gh cannot get). Resolved/outdated threads are hidden by default, counted in the header; `--all` includes them. Read-only: never reply to or resolve threads unless explicitly told to. |
 | `scripts/ci-failures.ts [run-id] [--pr N] [-R o/r]` | failing checks → failing jobs/steps → log snippet each; full logs saved to files (paths printed); rg those instead of re-fetching. |
 
 Rule of thumb: pr-snapshot answers "what's the state of this PR", pr-threads

@@ -4,11 +4,12 @@
 import { parseArgs } from "node:util";
 import { gh, resolveRepo, run, truncate } from "./lib.ts";
 
-const USAGE = `usage: pr-threads.ts <pr> [-R owner/repo] [--unresolved] [--author login] [--since ISO] [--full] [--json]
+const USAGE = `usage: pr-threads.ts <pr> [-R owner/repo] [--all] [--author login] [--since ISO] [--full] [--json]
 
-Review conversation for a PR: review bodies, issue comments, and inline
-threads with isResolved/isOutdated per thread.
-  --unresolved   only unresolved threads (omits review bodies and comments)
+Review conversation for a PR: review bodies, issue comments, and unresolved
+inline threads. Resolved/outdated threads are hidden by default (the header
+counts them); --all includes them.
+  --all          include resolved and outdated threads
   --author X     only items by X (threads: any comment by X)
   --since TS     only items with activity at/after TS (ISO 8601)
   --full         don't truncate bodies
@@ -139,7 +140,7 @@ run(async () => {
   const { values: v, positionals } = parseArgs({
     options: {
       repo: { type: "string", short: "R" },
-      unresolved: { type: "boolean" },
+      all: { type: "boolean" },
       author: { type: "string" },
       since: { type: "string" },
       full: { type: "boolean" },
@@ -155,9 +156,10 @@ run(async () => {
 
   let { convo, moreConvo, threads } = await fetchConversation(repo, pr);
   const totalThreads = threads.length;
-  if (v.unresolved) {
-    threads = threads.filter((t) => !t.isResolved);
-    convo = [];
+  let hidden = 0;
+  if (!v.all) {
+    threads = threads.filter((t) => !t.isResolved && !t.isOutdated);
+    hidden = totalThreads - threads.length;
   }
   if (v.author) {
     convo = convo.filter((i) => i.author === v.author);
@@ -174,12 +176,10 @@ run(async () => {
 
   const reviews = convo.filter((i) => i.kind === "review").length;
   const comments = convo.length - reviews;
-  const open = threads.filter((t) => !t.isResolved).length;
-  const outdated = threads.filter((t) => t.isOutdated).length;
-  const threadStat = `${threads.length}/${totalThreads} threads (${open} open · ${outdated} outdated)`;
-  const convoStat = v.unresolved
-    ? ""
-    : `${reviews} review ${reviews === 1 ? "body" : "bodies"} · ${comments} comment${comments === 1 ? "" : "s"} · `;
+  const threadStat = v.all
+    ? `${threads.length}/${totalThreads} threads (${threads.filter((t) => !t.isResolved).length} open · ${threads.filter((t) => t.isOutdated).length} outdated)`
+    : `${threads.length}/${totalThreads} threads${hidden > 0 ? ` (${hidden} resolved/outdated hidden; --all shows)` : ""}`;
+  const convoStat = `${reviews} review ${reviews === 1 ? "body" : "bodies"} · ${comments} comment${comments === 1 ? "" : "s"} · `;
   console.log(`${repo}#${pr}: ${convoStat}${threadStat}\n`);
   if (convo.length === 0 && threads.length === 0) {
     return void console.log(totalThreads === 0 ? "no review activity" : "nothing matches the filters");
@@ -191,7 +191,7 @@ run(async () => {
     console.log(`${tag} @${item.author} (${item.createdAt.slice(0, 10)})`);
     console.log(`  ${body.replace(/\n/g, "\n  ")}\n`);
   }
-  if (moreConvo && !v.unresolved) {
+  if (moreConvo) {
     console.log("… reviews/comments older than the last 50 omitted\n");
   }
 

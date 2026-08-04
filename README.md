@@ -9,9 +9,10 @@ output for the GitHub workflows agents run most:
   dense lines, replacing the 3-5 command loop and raw JSON dumps it takes
   to assemble the same picture.
 - **pr-threads** returns the full review conversation in one call: review
-  bodies, issue comments, and inline threads with the resolution and
-  outdated state porcelain `gh` can't surface, bodies truncated at the
-  point of diminishing returns, filterable to just what's unresolved.
+  bodies, issue comments, and unresolved inline threads, using the
+  resolution state porcelain `gh` can't surface. Resolved and outdated
+  threads stay out of context by default (the header counts what `--all`
+  would add), and bodies are truncated at the point of diminishing returns.
   Snapshot is the PR's state; threads is everything reviewers wrote.
 - **ci-failures** returns the failing jobs, their failed steps, and an
   error-anchored ~45-line snippet per job; full logs are written to disk
