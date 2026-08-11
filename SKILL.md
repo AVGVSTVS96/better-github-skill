@@ -1,6 +1,6 @@
 ---
 name: better-github-skill
-description: "GitHub work via gh CLI: PRs, review conversations, CI failures, repo state. Use when inspecting a PR, reading a review (bodies, comments, inline threads), debugging failing checks or Actions runs, or composing non-trivial gh commands. Scripts cover what raw gh can't do (thread resolution state) or reliably fumbles (PR snapshots, CI log drilldown); use raw gh directly for everything else."
+description: "GitHub work via gh CLI: PRs, review conversations, CI failures, repo state. Use when inspecting a PR, reading a review (bodies, comments, inline threads), debugging CI (finding which run failed, why a check or Actions run is red, reading job logs), or composing non-trivial gh commands. Scripts cover what raw gh can't do (thread resolution state) or reliably fumbles (PR snapshots, CI log drilldown); use raw gh directly for everything else."
 ---
 
 # better-github-skill
@@ -12,16 +12,18 @@ agents repeatedly get wrong. Scripts run TS directly (node ≥ 23.6), no deps.
 
 | script | use for |
 |---|---|
-| `scripts/pr-snapshot.ts <pr> [-R o/r]` | full PR state in one call: meta, mergeability, checks, files, reviews, comments, thread counts. Use instead of hand-assembling `pr view --json` field sets or chaining view/checks/comments calls. |
-| `scripts/pr-threads.ts <pr> [-R o/r] [--all] [--author X] [--since ISO]` | the full review conversation: review bodies, issue comments, and unresolved inline threads (resolution state porcelain gh cannot get). Resolved/outdated threads are hidden by default, counted in the header; `--all` includes them. Read-only: never reply to or resolve threads unless explicitly told to. |
-| `scripts/ci-failures.ts [run-id] [--pr N] [-R o/r]` | failing checks → failing jobs/steps → log snippet each; full logs saved to files (paths printed); rg those instead of re-fetching. |
+| `scripts/pr-snapshot.ts [pr] [-R o/r]` | full PR state in one call: meta, mergeability, checks, files, reviews, comments, thread counts. Use instead of hand-assembling `pr view --json` field sets or chaining view/checks/comments calls. |
+| `scripts/pr-threads.ts [pr] [-R o/r] [--all] [--author X] [--since ISO]` | the full review conversation: review bodies, issue comments, and unresolved inline threads (resolution state porcelain gh cannot get). Resolved/outdated threads are hidden by default, counted in the header; `--all` includes them. Read-only: never reply to or resolve threads unless explicitly told to. |
+| `scripts/ci-failures.ts [run-id] [--pr N] [--list] [-R o/r]` | failing checks → failing jobs/steps → log snippet each; full logs saved to files (paths printed); rg those instead of re-fetching. `--list [--workflow W] [-L n]` shows recent runs with conclusions; use it to find the failing run id instead of `gh run list --json` field sets. |
 
 Rule of thumb: pr-snapshot answers "what's the state of this PR", pr-threads
 answers "what did reviewers write". Neither replaces the other.
 
-All scripts: `--json` for structured output, `--full` to disable truncation
-(snapshot/threads), `--help` for usage. They exit 0 when the report succeeds
-even if CI is red or threads are unresolved.
+All scripts: `--json` for structured output, `--help` for usage (includes the
+`--json` shape). Omit the PR number to use the current branch's PR. Default
+output is sized for context; pass `--full` only when a truncation marker
+(`[…+N chars]`) hides something you need. They exit 0 when the report
+succeeds even if CI is red or threads are unresolved.
 
 ## Gotchas (each one burned real sessions repeatedly)
 

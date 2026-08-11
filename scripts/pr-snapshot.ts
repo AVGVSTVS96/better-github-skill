@@ -2,13 +2,21 @@
 // One-shot PR state: metadata, mergeability, checks, files, reviews, comments, thread counts.
 // Replaces hand-assembled `gh pr view --json` field sets and multi-call composites.
 import { parseArgs } from "node:util";
-import { gh, ghJson, resolveRepo, run, truncate } from "./lib.ts";
+import { gh, ghJson, resolvePr, resolveRepo, run, truncate } from "./lib.ts";
 
-const USAGE = `usage: pr-snapshot.ts <pr> [-R owner/repo] [--full] [--json]
+const USAGE = `usage: pr-snapshot.ts [pr] [-R owner/repo] [--full] [--json]
 
-Everything about a PR in one call.
+Everything about a PR in one call. Omit [pr] to use the current branch's PR.
   --full   don't truncate body/comment text
-  --json   structured output`;
+  --json   structured output, shape:
+           { number, title, state, isDraft, author{login}, url, createdAt,
+             baseRefName, headRefName, headRefOid, mergeable, mergeStateStatus,
+             reviewDecision, additions, deletions, changedFiles, body,
+             files: [{path, additions, deletions}],
+             comments: [{author{login}, createdAt, body}],
+             checks: [{name, state, bucket}],
+             threads: {open, total, capped},
+             reviewsLatest: {<login>: <state>} }`;
 
 const FIELDS =
   "number,title,state,isDraft,author,url,createdAt,baseRefName,headRefName,headRefOid," +
@@ -81,8 +89,7 @@ run(async () => {
     allowPositionals: true,
   });
   if (v.help) return void console.log(USAGE);
-  const n = Number(positionals[0]);
-  if (!Number.isInteger(n) || n <= 0) throw new Error(USAGE);
+  const n = await resolvePr(positionals[0], v.repo);
   const repo = await resolveRepo(v.repo);
 
   const [pr, checksRaw, threads] = await Promise.all([

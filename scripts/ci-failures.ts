@@ -5,12 +5,20 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { gh, ghJson, resolveRepo, run } from "./lib.ts";
+import { gh, ghJson, resolveRepo, run, truncate } from "./lib.ts";
 
 const USAGE = `usage: ci-failures.ts [run-id] [--pr N] [-R owner/repo] [--json]
+       ci-failures.ts --list [--workflow W] [-L n] [-R owner/repo] [--json]
 
 Failing GitHub Actions jobs with log snippets, for a run id, a PR, or the
-current branch's PR. Exits 0 when the report succeeds, even if CI is red.`;
+current branch's PR. Exits 0 when the report succeeds, even if CI is red.
+  --list      recent runs with conclusions, to find the failing run id;
+              -L n runs (default 10), --workflow W filters by name or file
+  --json      structured output, shape:
+              { repo, pr?, runs: [{runId, workflow, conclusion, url, checks[],
+                jobs: [{name, conclusion, url, failedSteps[],
+                        log: {file, lines, snippet} | {error}}]}],
+                external: [{name, state, bucket, link}] }`;
 
 const FAILING = new Set(["failure", "cancelled", "timed_out", "action_required"]);
 const MARKERS = /##\[error\]|\berror\b|\bfail(?:ed|ure)?\b|exception|traceback|panic|fatal/i;
@@ -85,18 +93,54 @@ async function analyzeRun(repo: string, runId: string, checkNames: string[], log
 type RunResult = Awaited<ReturnType<typeof analyzeRun>>;
 type RunEntry = RunResult | { runId: string; checks: string[]; error: string };
 
+interface RunRow {
+  databaseId: number;
+  workflowName: string;
+  displayTitle: string;
+  event: string;
+  status: string;
+  conclusion: string;
+  createdAt: string;
+}
+
 run(async () => {
   const { values: v, positionals } = parseArgs({
     options: {
       pr: { type: "string" },
       repo: { type: "string", short: "R" },
+      list: { type: "boolean" },
+      workflow: { type: "string" },
+      limit: { type: "string", short: "L" },
       json: { type: "boolean" },
+      // no-op: snapshot/threads have --full, so agents pass it here too
+      full: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
     allowPositionals: true,
   });
   if (v.help) return void console.log(USAGE);
   const repo = await resolveRepo(v.repo);
+
+  if (v.list) {
+    const limit = v.limit ? Number(v.limit) : 10;
+    if (!Number.isInteger(limit) || limit <= 0) throw new Error(`-L must be a positive number, got: ${v.limit}`);
+    const args = ["run", "list", "-R", repo, "--limit", String(limit), "--json",
+      "databaseId,workflowName,displayTitle,event,status,conclusion,createdAt"];
+    if (v.workflow) args.push("--workflow", v.workflow);
+    const rows = await ghJson<RunRow[]>(args);
+    if (v.json) return void console.log(JSON.stringify({ repo, runs: rows }, null, 2));
+    console.log(`${repo}: last ${rows.length} runs${v.workflow ? ` · workflow ${v.workflow}` : ""}`);
+    for (const r of rows) {
+      const mark = r.conclusion === "success" ? "✓" : FAILING.has(r.conclusion) ? "✗" : "○";
+      const concl = r.conclusion || r.status;
+      const when = r.createdAt.slice(0, 16).replace("T", " ");
+      const title = r.displayTitle && r.displayTitle !== r.workflowName ? ` · ${truncate(r.displayTitle, 48)}` : "";
+      console.log(`${mark} ${r.databaseId}  ${when}  ${concl.padEnd(11)} ${r.event.padEnd(17)} ${r.workflowName}${title}`);
+    }
+    if (rows.length > 0) console.log(`\ndrill into a failure: ci-failures.ts <run-id>${v.repo ? ` -R ${repo}` : ""}`);
+    return;
+  }
+
   const runId = positionals[0];
   const logDir = join(tmpdir(), "gh-ci");
   mkdirSync(logDir, { recursive: true });

@@ -2,18 +2,23 @@
 // The review conversation for a PR: review bodies, issue comments, and inline
 // threads with resolution state (isResolved/isOutdated; porcelain gh can't get it).
 import { parseArgs } from "node:util";
-import { gh, resolveRepo, run, truncate } from "./lib.ts";
+import { gh, resolvePr, resolveRepo, run, truncate } from "./lib.ts";
 
-const USAGE = `usage: pr-threads.ts <pr> [-R owner/repo] [--all] [--author login] [--since ISO] [--full] [--json]
+const USAGE = `usage: pr-threads.ts [pr] [-R owner/repo] [--all] [--author login] [--since ISO] [--full] [--json]
 
 Review conversation for a PR: review bodies, issue comments, and unresolved
 inline threads. Resolved/outdated threads are hidden by default (the header
-counts them); --all includes them.
+counts them); --all includes them. Omit [pr] to use the current branch's PR.
   --all          include resolved and outdated threads
   --author X     only items by X (threads: any comment by X)
   --since TS     only items with activity at/after TS (ISO 8601)
   --full         don't truncate bodies
-  --json         structured output`;
+  --json         structured output, shape:
+                 { conversation: [{kind: "review"|"comment", state?, author,
+                                   createdAt, body}],
+                   threads: [{isResolved, isOutdated, path, line, originalLine,
+                              moreComments,
+                              comments: [{author, createdAt, body}]}] }`;
 
 interface Comment {
   author: string;
@@ -150,8 +155,7 @@ run(async () => {
     allowPositionals: true,
   });
   if (v.help) return void console.log(USAGE);
-  const pr = Number(positionals[0]);
-  if (!Number.isInteger(pr) || pr <= 0) throw new Error(USAGE);
+  const pr = await resolvePr(positionals[0], v.repo);
   const repo = await resolveRepo(v.repo);
 
   let { convo, moreConvo, threads } = await fetchConversation(repo, pr);

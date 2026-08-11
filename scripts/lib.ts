@@ -54,12 +54,30 @@ export async function resolveRepo(flag?: string): Promise<string> {
   }
 }
 
+/** PR number: explicit positional, or the current branch's PR when omitted. */
+export async function resolvePr(arg: string | undefined, repoFlag: string | undefined): Promise<number> {
+  if (arg !== undefined) {
+    const n = Number(arg);
+    if (!Number.isInteger(n) || n <= 0) throw new Error(`PR must be a positive number, got: ${arg}`);
+    return n;
+  }
+  // with an explicit -R, "the current branch's PR" would resolve against the
+  // cwd repo and silently target the wrong PR; refuse to guess
+  if (repoFlag) throw new Error("with -R, also pass the PR number");
+  return (await ghJson<{ number: number }>(["pr", "view", "--json", "number"])).number;
+}
+
 export function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max)} […+${s.length - max} chars]`;
 }
 
 /** Wrap a script's main(): print clean errors, exit 1 only on real failure. */
 export function run(main: () => Promise<void>): void {
+  // agents pipe these scripts into head/tail; a closed pipe is not a failure
+  process.stdout.on("error", (e: NodeJS.ErrnoException) => {
+    if (e.code === "EPIPE") process.exit(0);
+    throw e;
+  });
   main().catch((e: unknown) => {
     console.error(e instanceof Error ? e.message : String(e));
     process.exit(1);
