@@ -17,6 +17,8 @@ output for the GitHub workflows agents run most:
 - **ci-failures** returns the failing jobs, their failed steps, and an
   error-anchored ~45-line snippet per job; full logs are written to disk
   and referenced by path, so 10k lines of CI output never enter context.
+  `--list` shows recent runs with conclusions, replacing the `gh run list
+  --json` field-guessing that otherwise precedes every drilldown.
 
 For everything the scripts don't cover, agents use raw `gh` directly, and
 SKILL.md hardens that too: 13 gotchas mined from the same sessions, each a
