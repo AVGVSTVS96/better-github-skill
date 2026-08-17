@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Failing CI drilldown: checks → failing jobs/steps → log snippet each.
 // Full job logs are saved to files (paths printed); rg those instead of re-fetching.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -60,6 +60,21 @@ function snippet(log: string, before = 40, after = 5, cap = 100): string {
 
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "job";
+}
+
+// Logs must outlive the process (paths are printed for later rg), but not the
+// session: sweep dirs older than the TTL, including the legacy shared gh-ci dir.
+const LOG_TTL_MS = 2 * 60 * 60 * 1000;
+function makeLogDir(): string {
+  const base = tmpdir();
+  for (const name of readdirSync(base)) {
+    if (!name.startsWith("gh-ci")) continue;
+    try {
+      const dir = join(base, name);
+      if (Date.now() - statSync(dir).mtimeMs > LOG_TTL_MS) rmSync(dir, { recursive: true, force: true });
+    } catch {} // raced with another run or not ours to delete
+  }
+  return mkdtempSync(join(base, "gh-ci-")); // mode 0700: private per-run dir
 }
 
 async function jobLog(repo: string, job: Job, logDir: string) {
@@ -142,8 +157,7 @@ run(async () => {
   }
 
   const runId = positionals[0];
-  const logDir = join(tmpdir(), "gh-ci");
-  mkdirSync(logDir, { recursive: true });
+  const logDir = makeLogDir();
 
   // resolve the failing runs: explicit run id, or a PR's failing checks
   const runs = new Map<string, string[]>(); // run id → check names
