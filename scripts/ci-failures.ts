@@ -43,6 +43,14 @@ interface RunView {
   jobs: Job[];
 }
 
+// Colored runner output would put raw control sequences in the saved file and in
+// the snippet that enters context; grep and eyes both read better without them.
+const ANSI = /\u001b\[[0-9;?]*[ -\/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
+
+function stripAnsi(s: string): string {
+  return s.replace(ANSI, "");
+}
+
 // The tail of a failed log is post-job cleanup noise; the story sits just above
 // the last error marker, so the context window is asymmetric.
 function snippet(log: string, before = 40, after = 5, cap = 100): string {
@@ -77,10 +85,25 @@ function makeLogDir(): string {
   return mkdtempSync(join(base, "gh-ci-")); // mode 0700: private per-run dir
 }
 
+// gh >= 2.100 refuses to print a response holding terminal escape sequences, and
+// runner logs are full of them; older gh rejects the flag before any request, so
+// the retry costs nothing.
+async function fetchJobLog(repo: string, jobId: number): Promise<string> {
+  const path = `repos/${repo}/actions/jobs/${jobId}/logs`;
+  try {
+    return await gh(["api", path, "--allow-escape-sequences"]);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!/unknown flag/i.test(msg)) throw e;
+    return await gh(["api", path]);
+  }
+}
+
 async function jobLog(repo: string, job: Job, logDir: string) {
   try {
-    const log = await gh(["api", `repos/${repo}/actions/jobs/${job.databaseId}/logs`]);
-    if (log.startsWith("PK")) return { error: "log came back as a zip archive; open the job URL instead" };
+    const raw = await fetchJobLog(repo, job.databaseId);
+    if (raw.startsWith("PK")) return { error: "log came back as a zip archive; open the job URL instead" };
+    const log = stripAnsi(raw);
     const file = join(logDir, `${job.databaseId}-${slug(job.name)}.log`);
     writeFileSync(file, log);
     return { file, lines: log.split("\n").length, snippet: snippet(log) };
