@@ -14,6 +14,12 @@ output for the GitHub workflows agents run most:
   threads stay out of context by default (the header counts what `--all`
   would add), and bodies are truncated at the point of diminishing returns.
   Snapshot is the PR's state; threads is everything reviewers wrote.
+- **pr-watch** waits on a PR the way T3 Code's PR watching does: it blocks
+  until something worth the agent's turn happens (a check failed, the
+  required or all checks passed, someone else commented or reviewed, the
+  branch conflicts, the PR merged or closed), prints it and exits. It reads
+  with conditional requests, which GitHub doesn't charge for when nothing
+  changed, so a quiet PR costs next to nothing; numbers below.
 - **ci-failures** returns the failing jobs, their failed steps, and an
   error-anchored ~45-line snippet per job; full logs are written to disk
   and referenced by path, so 10k lines of CI output never enter context.
@@ -32,6 +38,52 @@ of rediscovering them.
 | context consumed | full logs, diffs, JSON dumps | bounded snippets, files on disk |
 | false-error retries | SIGPIPE / exit-code noise | none; exit 0 when the report succeeds |
 | latency | sequential multi-turn | parallel, single turn |
+
+## Rate limits: what waiting on a PR costs
+
+Every agent on a GitHub account shares 5,000 REST requests and 5,000
+GraphQL points an hour. The usual ways agents wait on a PR spend that
+fast. Measured side by side on a live
+[pingdotgg/t3code](https://github.com/pingdotgg/t3code) PR, from a push
+through CI to review comments, same 15 minutes:
+
+| how the agent waits | counted against the limit | per hour of watching |
+|---|---|---|
+| `gh run watch` (polls every 3s, no caching) | 63 REST requests in its first minute | ~3,800 |
+| `gh pr checks --watch` (every 10s; exits when CI ends) | 22 GraphQL points in 3.6 min | ~370 |
+| `gh pr view --json …` every 60s | 15 GraphQL points | 60 |
+| **`pr-watch.ts`** (every 60s) | **19 of 61 requests** (42 answered 304, free) | **~12 quiet** |
+
+pr-watch's 19 include its cold start (~10 reads), CI progress and a
+review comment; once quiet it spent 2 in 10 minutes. It also covers what
+the others don't: comments, reviews, conflicts, required checks.
+
+How, mostly borrowed from T3 Code's PR watching (`watch_pull_request`):
+
+- **Conditional requests.** Every read sends the ETag of the last answer;
+  GitHub replies 304 when nothing changed, and 304s don't count. ETags
+  live on disk, so reruns and parallel agents watching one PR share them,
+  and a read another watcher made this interval is reused with no request.
+- **A cheap "anything changed?" probe.** The issue view of a PR changes
+  only when the PR does; the pull view embeds the base branch's tip, so on
+  a busy repo it changes every time main moves (it answered 200 every 15s
+  where the issue view answered 304). pr-watch probes the issue view and
+  reads the pull view only on a change, or every 5 minutes for conflicts.
+  Comments and reviews are read only when the PR's `updated_at` moves.
+- **Wakes only for news**: a failed check, the required or all checks
+  passing, someone else's comment or review, a new conflict, merge or
+  close, or no checks 15 minutes after a push. Your own comments don't
+  count; reruns never repeat news; 10 comment-only wakes in a row end the
+  watch, so two bots can't ping-pong an agent forever.
+- **Limits pause, never fail.** It honors `retry-after` and
+  `x-ratelimit-reset`, backs off a minute and doubling on secondary limits,
+  and leaves the last 10% of the hour's budget to interactive work.
+  Failed reads back off from 20s to 15 minutes and give up after 8.
+
+SKILL.md adds the rest: never `gh run watch` or sleep loops, `gh api
+rate_limit` is free, `gh api --cache` for repeat reads, and GitHub's
+second cap of ~80 posts a minute (one review with 119 inline comments was
+refused on every try), so agents post one at a time and batch findings.
 
 ## Why these three (the data)
 
@@ -116,4 +168,5 @@ Scripts are plain executables; they work standalone without the skill harness:
 ~/.agents/skills/better-github-skill/scripts/pr-threads.ts 5017 -R owner/repo --unresolved
 ~/.agents/skills/better-github-skill/scripts/pr-snapshot.ts 5017 -R owner/repo
 ~/.agents/skills/better-github-skill/scripts/ci-failures.ts --pr 5017 -R owner/repo
+~/.agents/skills/better-github-skill/scripts/pr-watch.ts 5017 -R owner/repo
 ```

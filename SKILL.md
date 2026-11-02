@@ -1,6 +1,6 @@
 ---
 name: better-github-skill
-description: "GitHub work via gh CLI: PRs, review conversations, CI failures, repo state. Use when inspecting a PR, reading a review (bodies, comments, inline threads), debugging CI (finding which run failed, why a check or Actions run is red, reading job logs), or composing non-trivial gh commands. Scripts cover what raw gh can't do (thread resolution state) or reliably fumbles (PR snapshots, CI log drilldown); use raw gh directly for everything else."
+description: "GitHub work via gh CLI: PRs, review conversations, CI failures, repo state, rate limits. Use when inspecting a PR, reading a review (bodies, comments, inline threads), debugging CI (finding which run failed, why a check or Actions run is red, reading job logs), waiting on or babysitting a PR (CI, reviews, conflicts), or composing non-trivial gh commands. Scripts cover what raw gh can't do (thread resolution state) or reliably fumbles (PR snapshots, CI log drilldown); use raw gh directly for everything else."
 ---
 
 # better-github-skill
@@ -14,6 +14,7 @@ agents repeatedly get wrong. Scripts run TS directly (node ≥ 23.6), no deps.
 |---|---|
 | `scripts/pr-snapshot.ts [pr] [-R o/r]` | full PR state in one call: meta, mergeability, checks, files, reviews, comments, thread counts. Use instead of hand-assembling `pr view --json` field sets or chaining view/checks/comments calls. |
 | `scripts/pr-threads.ts [pr] [-R o/r] [--all] [--author X] [--since ISO]` | the full review conversation: review bodies, issue comments, and unresolved inline threads (resolution state porcelain gh cannot get). Resolved/outdated threads are hidden by default, counted in the header; `--all` includes them. Read-only: never reply to or resolve threads unless explicitly told to. |
+| `scripts/pr-watch.ts [pr] [-R o/r] [--timeout 9m]` | wait on a PR: blocks until a check fails, the required or all checks pass, someone else comments or reviews, the branch conflicts, or the PR merges or closes; prints what happened. Rerun after acting; it never repeats news. Quiet PRs cost nothing (conditional requests). Run it in the background, or give the tool a timeout above `--timeout`. |
 | `scripts/ci-failures.ts [run-id] [--pr N] [--list] [-R o/r]` | failing checks → failing jobs/steps → log snippet each; full logs saved to files (paths printed); rg those instead of re-fetching. `--list [--workflow W] [-L n]` shows recent runs with conclusions; use it to find the failing run id instead of `gh run list --json` field sets. |
 
 Rule of thumb: pr-snapshot answers "what's the state of this PR", pr-threads
@@ -54,5 +55,22 @@ succeeds even if CI is red or threads are unresolved.
 - Branch drift: `gh api 'repos/{owner}/{repo}/compare/BASE...HEAD' --jq '{ahead_by,behind_by}'`
 - jq beyond one line: write the program to a file and `jq -f prog.jq`; inline
   zsh quoting breaks.
-- Don't sleep-poll runs or checks; `gh run watch ID` and
-  `gh pr checks N --watch --fail-fast` exist; let the harness background them.
+
+## Rate limits
+
+Every agent on the account shares 5,000 REST requests and 5,000 GraphQL points an hour.
+
+- Waiting on CI or reviewers is `pr-watch.ts`, never `gh run watch` (~60 REST
+  calls a minute), `gh pr checks --watch` (a GraphQL query every 10s) or a
+  sleep loop around `gh pr view`. A watched check failing? `ci-failures.ts`.
+- Checking the budget is free: `gh api rate_limit --jq '.resources|{core,graphql}'`.
+- Repeat reads of slow-changing data: `gh api --cache 1h PATH` answers from
+  disk without a request.
+- Writes have a second cap: about 80 content-creating requests a minute and
+  500 an hour per account (comments, reviews, issues, PRs; the web UI counts
+  too). Post one at a time, never in parallel. Put findings in one review
+  rather than a comment each, and keep its inline comments well under 80: a
+  review with 119 was refused on every try.
+- Rate limited (403/429)? Wait `retry-after` seconds, or until
+  `x-ratelimit-reset` when `x-ratelimit-remaining` is 0, else a minute, then
+  double. Retrying sooner extends the block.
